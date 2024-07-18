@@ -15,6 +15,9 @@ import { removeInitialSlash } from './remove-initial-slash';
 import { captureLlmRecord, mockedLlmCompletion } from './mock-llm';
 import { getCodeBlock } from './interactive-mode';
 import Anthropic from '@anthropic-ai/sdk';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 const defaultModel = 'gpt-4o';
 const assistantIdentifierMetadataKey = '_id';
@@ -44,6 +47,17 @@ const supportsFunctionCalling = (model?: string) => {
     'gpt-3.5-turbo-1106': true,
     'gpt-3.5-turbo-0613': true,
   }[model || ''];
+};
+
+const generateRandomString = (length) => {
+  return crypto.randomBytes(length).toString('hex').slice(0, length);
+};
+
+const savePromptAndResponse = (prompt, response) => {
+  const randomString = generateRandomString(5);
+  const filePath = path.join(process.env.HOME || process.env.USERPROFILE, 'Desktop', `prompt_${randomString}.txt`);
+  const content = `${prompt}\n---\n${response}`;
+  fs.writeFileSync(filePath, content, 'utf8');
 };
 
 export const getOpenAi = async function () {
@@ -105,7 +119,7 @@ export const getFileSuggestion = async function (
     useAnthropic(model) ||
     !supportsFunctionCalling(model)
   ) {
-    return removeInitialSlash(
+    const response = removeInitialSlash(
       removeBackticks(
         await getSimpleCompletion({
           messages: [
@@ -119,6 +133,8 @@ export const getFileSuggestion = async function (
         })
       )
     );
+    savePromptAndResponse(prompt, response);
+    return response;
   }
   const openai = await getOpenAi();
   const completion = await openai.chat.completions.create({
@@ -160,9 +176,13 @@ export const getFileSuggestion = async function (
   const jsonStr =
     completion.choices[0]?.message.tool_calls?.[0]?.function.arguments;
   if (!jsonStr) {
-    return 'src/algorithm.js';
+    const response = 'src/algorithm.js';
+    savePromptAndResponse(prompt, response);
+    return response;
   }
-  return removeInitialSlash(JSON.parse(jsonStr).filePath);
+  const response = removeInitialSlash(JSON.parse(jsonStr).filePath);
+  savePromptAndResponse(prompt, response);
+  return response;
 };
 
 export const getSimpleCompletion = async function (options: {
@@ -175,8 +195,12 @@ export const getSimpleCompletion = async function (options: {
     USE_MOCK_LLM: useMockLlm,
   } = await getConfig();
 
+  const prompt = options.messages.map(msg => msg.content).join('\n');
+
   if (useMockLlm) {
-    return mockedLlmCompletion(mockLlmRecordFile, options.messages);
+    const response = await mockedLlmCompletion(mockLlmRecordFile, options.messages);
+    savePromptAndResponse(prompt, response);
+    return response;
   }
 
   if (useAnthropic(model)) {
@@ -204,6 +228,7 @@ export const getSimpleCompletion = async function (options: {
 
     await result.done();
     captureLlmRecord(options.messages, output, mockLlmRecordFile);
+    savePromptAndResponse(prompt, output);
     return output;
   }
 
@@ -223,9 +248,10 @@ export const getSimpleCompletion = async function (options: {
       }
     }
     captureLlmRecord(options.messages, output, mockLlmRecordFile);
-
+    savePromptAndResponse(prompt, output);
     return output;
   }
+
   const openai = await getOpenAi();
   const completion = await openai.chat.completions.create({
     model: model || defaultModel,
@@ -248,7 +274,7 @@ export const getSimpleCompletion = async function (options: {
   }
 
   captureLlmRecord(options.messages, output, mockLlmRecordFile);
-
+  savePromptAndResponse(prompt, output);
   return output;
 };
 
@@ -264,8 +290,13 @@ export const getCompletion = async function (options: {
     OPENAI_API_ENDPOINT: endpoint,
     USE_ASSISTANT,
   } = await getConfig();
+
+  const prompt = options.messages.map(msg => msg.content).join('\n');
+
   if (useMockLlm) {
-    return mockedLlmCompletion(mockLlmRecordFile, options.messages);
+    const response = await mockedLlmCompletion(mockLlmRecordFile, options.messages);
+    savePromptAndResponse(prompt, response);
+    return response;
   }
 
   const useModel = model || defaultModel;
@@ -280,6 +311,7 @@ export const getCompletion = async function (options: {
       },
     });
     process.stdout.write(formatMessage('\n'));
+    savePromptAndResponse(prompt, output);
     return output;
   }
 
@@ -292,8 +324,10 @@ export const getCompletion = async function (options: {
       },
     });
     process.stdout.write(formatMessage('\n'));
+    savePromptAndResponse(prompt, output);
     return output;
   }
+
   const openai = await getOpenAi();
 
   if (options.useAssistant ?? (USE_ASSISTANT && !endpoint)) {
@@ -349,6 +383,7 @@ export const getCompletion = async function (options: {
           process.stdout.write('\n');
           const output = getCodeBlock(result);
           captureLlmRecord(options.messages, output, mockLlmRecordFile);
+          savePromptAndResponse(prompt, output);
           resolve(output);
         });
     });
@@ -369,7 +404,7 @@ export const getCompletion = async function (options: {
     }
     process.stdout.write('\n');
     captureLlmRecord(options.messages, output, mockLlmRecordFile);
-
+    savePromptAndResponse(prompt, output);
     return output;
   }
 };

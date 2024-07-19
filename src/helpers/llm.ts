@@ -53,10 +53,10 @@ const generateRandomString = (length) => {
   return crypto.randomBytes(length).toString('hex').slice(0, length);
 };
 
-const savePromptAndResponse = (prompt, response) => {
+const savePromptAndResponse = (message, response) => {
   const randomString = generateRandomString(5);
-  const filePath = path.join(process.env.HOME || process.env.USERPROFILE, 'Desktop', `prompt_${randomString}.txt`);
-  const content = `${prompt}\n---\n${response}`;
+  const filePath = path.join(process.env.HOME || process.env.USERPROFILE, `message_${randomString}.txt`);
+  const content = JSON.stringify({ message, response }, null, 2);
   fs.writeFileSync(filePath, content, 'utf8');
 };
 
@@ -133,7 +133,7 @@ export const getFileSuggestion = async function (
         })
       )
     );
-    savePromptAndResponse(prompt, response);
+    savePromptAndResponse(message, response);
     return response;
   }
   const openai = await getOpenAi();
@@ -177,11 +177,11 @@ export const getFileSuggestion = async function (
     completion.choices[0]?.message.tool_calls?.[0]?.function.arguments;
   if (!jsonStr) {
     const response = 'src/algorithm.js';
-    savePromptAndResponse(prompt, response);
+    savePromptAndResponse(message, response);
     return response;
   }
   const response = removeInitialSlash(JSON.parse(jsonStr).filePath);
-  savePromptAndResponse(prompt, response);
+  savePromptAndResponse(message, response);
   return response;
 };
 
@@ -199,7 +199,6 @@ export const getSimpleCompletion = async function (options: {
 
   if (useMockLlm) {
     const response = await mockedLlmCompletion(mockLlmRecordFile, options.messages);
-    savePromptAndResponse(prompt, response);
     return response;
   }
 
@@ -228,7 +227,7 @@ export const getSimpleCompletion = async function (options: {
 
     await result.done();
     captureLlmRecord(options.messages, output, mockLlmRecordFile);
-    savePromptAndResponse(prompt, output);
+    savePromptAndResponse(options.messages, output);
     return output;
   }
 
@@ -248,7 +247,7 @@ export const getSimpleCompletion = async function (options: {
       }
     }
     captureLlmRecord(options.messages, output, mockLlmRecordFile);
-    savePromptAndResponse(prompt, output);
+    savePromptAndResponse(options.messages, output);
     return output;
   }
 
@@ -274,7 +273,7 @@ export const getSimpleCompletion = async function (options: {
   }
 
   captureLlmRecord(options.messages, output, mockLlmRecordFile);
-  savePromptAndResponse(prompt, output);
+  savePromptAndResponse(options.messages, output);
   return output;
 };
 
@@ -295,7 +294,7 @@ export const getCompletion = async function (options: {
 
   if (useMockLlm) {
     const response = await mockedLlmCompletion(mockLlmRecordFile, options.messages);
-    savePromptAndResponse(prompt, response);
+    savePromptAndResponse(options.messages, response);
     return response;
   }
 
@@ -311,7 +310,7 @@ export const getCompletion = async function (options: {
       },
     });
     process.stdout.write(formatMessage('\n'));
-    savePromptAndResponse(prompt, output);
+    savePromptAndResponse(options.messages, output);
     return output;
   }
 
@@ -324,7 +323,7 @@ export const getCompletion = async function (options: {
       },
     });
     process.stdout.write(formatMessage('\n'));
-    savePromptAndResponse(prompt, output);
+    savePromptAndResponse(options.messages, output);
     return output;
   }
 
@@ -383,7 +382,7 @@ export const getCompletion = async function (options: {
           process.stdout.write('\n');
           const output = getCodeBlock(result);
           captureLlmRecord(options.messages, output, mockLlmRecordFile);
-          savePromptAndResponse(prompt, output);
+          savePromptAndResponse(options.messages, output);
           resolve(output);
         });
     });
@@ -404,7 +403,7 @@ export const getCompletion = async function (options: {
     }
     process.stdout.write('\n');
     captureLlmRecord(options.messages, output, mockLlmRecordFile);
-    savePromptAndResponse(prompt, output);
+    savePromptAndResponse(options.messages, output);
     return output;
   }
 };
